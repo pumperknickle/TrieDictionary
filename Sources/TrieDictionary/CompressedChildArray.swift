@@ -82,6 +82,15 @@ internal struct CompressedChildArray<Value> {
         }
     }
     
+    var firstChild: (Character, TrieNode<Value>)? {
+        guard !nodes.isEmpty else { return nil }
+        return (chars[0], nodes[0])
+    }
+    
+    var childCount: Int {
+        nodes.count
+    }
+    
     private func hashCharacter(_ char: Character) -> Int {
         let scalar = char.unicodeScalars.first?.value ?? 0
         return Int(scalar % 64)

@@ -341,4 +341,69 @@ final class TrieDictionaryTests: XCTestCase {
         XCTAssertEqual(cafeSubtrie[""], "coffee")
         XCTAssertEqual(cafeSubtrie["teria"], "restaurant")
     }
+    
+    func testTraverseReturnsNilForNonExistentPrefix() {
+        var dict = TrieDictionary<Int>()
+        dict["apple"] = 1
+        dict["application"] = 2
+        dict["banana"] = 3
+        
+        let nonExistentSubtrie = dict.traverse("xyz")
+        XCTAssertTrue(nonExistentSubtrie.isEmpty)
+        XCTAssertEqual(nonExistentSubtrie.count, 0)
+        XCTAssertNil(nonExistentSubtrie[""])
+        XCTAssertNil(nonExistentSubtrie["any"])
+    }
+    
+    func testTraverseReturnsNilForPrefixNotInPath() {
+        var dict = TrieDictionary<String>()
+        dict["hello"] = "world"
+        dict["help"] = "me"
+        
+        let mismatchedSubtrie = dict.traverse("helicopter")
+        XCTAssertTrue(mismatchedSubtrie.isEmpty)
+        XCTAssertEqual(mismatchedSubtrie.count, 0)
+    }
+    
+    func testTraverseReturnsNilForPartialMismatch() {
+        var dict = TrieDictionary<Int>()
+        dict["test"] = 1
+        dict["testing"] = 2
+        dict["tesla"] = 3
+        
+        let mismatchedSubtrie = dict.traverse("tex")
+        XCTAssertTrue(mismatchedSubtrie.isEmpty)
+        XCTAssertEqual(mismatchedSubtrie.count, 0)
+    }
+    
+    func testTraverseReturnsNilWithSingleCharacterMismatch() {
+        var dict = TrieDictionary<String>()
+        dict["a"] = "alpha"
+        dict["b"] = "beta"
+        dict["c"] = "gamma"
+        
+        let mismatchedSubtrie = dict.traverse("z")
+        XCTAssertTrue(mismatchedSubtrie.isEmpty)
+        XCTAssertEqual(mismatchedSubtrie.count, 0)
+    }
+    
+    func testTraverseReturnsNilForLongerPrefixThanKeys() {
+        var dict = TrieDictionary<Int>()
+        dict["a"] = 1
+        dict["ab"] = 2
+        
+        let longerPrefixSubtrie = dict.traverse("abcdefg")
+        XCTAssertTrue(longerPrefixSubtrie.isEmpty)
+        XCTAssertEqual(longerPrefixSubtrie.count, 0)
+    }
+    
+    func testTraverseReturnsNilForCompressedPathMismatch() {
+        var dict = TrieDictionary<String>()
+        dict["application"] = "app"
+        dict["appreciate"] = "thanks"
+        
+        let compressedMismatchSubtrie = dict.traverse("approve")
+        XCTAssertTrue(compressedMismatchSubtrie.isEmpty)
+        XCTAssertEqual(compressedMismatchSubtrie.count, 0)
+    }
 }

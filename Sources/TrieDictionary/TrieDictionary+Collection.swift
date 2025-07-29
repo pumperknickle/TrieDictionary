@@ -48,7 +48,11 @@ public struct TrieDictionaryIterator<Value>: IteratorProtocol {
         }
         
         let key = keys[currentIndex]
-        let value = dictionary[key]!
+        guard let value = dictionary[key] else {
+            // Skip keys that don't have values (shouldn't happen in a well-formed trie)
+            currentIndex += 1
+            return next()
+        }
         currentIndex += 1
         
         return (key: key, value: value)
