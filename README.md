@@ -77,6 +77,27 @@ let keys = dict.keys()     // [String]
 let values = dict.values() // [Value]
 ```
 
+### Additional Operations
+
+```swift
+// Check if dictionary is empty
+if dict.isEmpty {
+    print("Dictionary is empty")
+}
+
+// Get count of elements
+print("Count: \(dict.count)")
+
+// Access root value (empty string key)
+let rootValue = dict.rootValue
+
+// Traverse with prefix (returns sub-dictionary)
+let subDict = dict.traverse("app")  // All keys starting with "app"
+
+// Remove all elements
+dict.removeAll()
+```
+
 ### Functional Operations
 
 TrieDictionary provides functional programming methods that return new instances instead of mutating the original:
@@ -115,6 +136,50 @@ let result = original
 - **Method Chaining**: Fluent API for complex transformations
 - **Structural Sharing**: Efficient memory usage through shared internal nodes
 
+### Protocol Conformance
+
+TrieDictionary conforms to several Swift protocols for seamless integration:
+
+```swift
+// Collection and Sequence conformance
+for (key, value) in dict {
+    print("\(key): \(value)")
+}
+
+// Dictionary literal initialization
+let dict: TrieDictionary<String> = [
+    "key1": "value1",
+    "key2": "value2"
+]
+
+// String representation
+print(dict)  // Prints: ["key1": "value1", "key2": "value2"]
+print(dict.debugDescription)  // Prints: TrieDictionary(["key1": "value1", "key2": "value2"])
+
+// Equality comparison (for Equatable values)
+let dict1: TrieDictionary<Int> = ["a": 1, "b": 2]
+let dict2: TrieDictionary<Int> = ["a": 1, "b": 2]
+print(dict1 == dict2)  // true
+```
+
+### Advanced Collection Operations
+
+```swift
+// Compact map values (removes nil results)
+let numbers: TrieDictionary<String> = ["a": "1", "b": "not-a-number", "c": "3"]
+let integers = numbers.compactMapValues { Int($0) }  // ["a": 1, "c": 3]
+
+// Merge with conflict resolution
+var dict1: TrieDictionary<Int> = ["a": 1, "b": 2]
+let dict2: TrieDictionary<Int> = ["b": 20, "c": 3]
+
+// Mutating merge
+dict1.merge(dict2) { old, new in old + new }  // ["a": 1, "b": 22, "c": 3]
+
+// Non-mutating merge
+let merged = dict1.merging(dict2) { old, new in max(old, new) }
+```
+
 ## Architecture
 
 ### HAMT-Inspired Design
@@ -140,14 +205,13 @@ Add this to your `Package.swift` file:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yourusername/TrieDictionary.git", from: "1.0.0")
+    .package(url: "https://github.com/pumperknickle/TrieDictionary.git", from: "1.0.0")
 ]
 ```
 
 ## Requirements
 
-- Swift 5.9+
-- iOS 13.0+ / macOS 10.15+ / tvOS 13.0+ / watchOS 6.0+
+- Swift 6.0+
 
 ## Performance
 
