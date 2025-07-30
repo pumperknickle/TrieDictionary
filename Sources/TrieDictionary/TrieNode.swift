@@ -1,48 +1,119 @@
 import Foundation
 
+/**
+ Internal node structure for the compressed trie implementation.
+ 
+ Each TrieNode represents a compressed path in the trie, containing:
+ - An optional value (if this node represents the end of a key)
+ - A compressed path string (representing a chain of characters)
+ - Child nodes for continuing the trie structure
+ 
+ ## Path Compression:
+ Instead of storing single characters at each level, nodes store entire path segments.
+ For example, if "application" is the only word starting with "app", the node will
+ store "application" as a compressed path rather than creating separate nodes for
+ "a", "p", "p", "l", "i", "c", "a", "t", "i", "o", "n".
+ 
+ ## Performance Optimizations:
+ - Method inlining for hot paths
+ - ArraySlice usage to avoid string allocations
+ - Efficient path splitting and merging algorithms
+ */
 internal struct TrieNode<Value> {
+    /// The value stored at this node, if any
     private let value: Value?
+    
+    /// Child nodes organized in a compressed array for efficient lookup
     private let children: CompressedChildArray<Value>
+    
+    /// The compressed path segment stored at this node
     private let compressedPath: String
     
+    /**
+     Creates an empty node with no value, children, or compressed path.
+     */
     init() {
         self.value = nil
         self.children = CompressedChildArray()
         self.compressedPath = ""
     }
     
+    /**
+     Creates a node with only a compressed path and no value or children.
+     
+     - Parameter compressedPath: The path segment to store at this node
+     */
     init(compressedPath: String) {
         self.value = nil
         self.children = CompressedChildArray()
         self.compressedPath = compressedPath
     }
     
+    /**
+     Creates a node with the specified value, children, and compressed path.
+     
+     - Parameter value: The value to store at this node (nil if no value)
+     - Parameter children: The child nodes
+     - Parameter compressedPath: The compressed path segment
+     */
     init(value: Value?, children: CompressedChildArray<Value>, compressedPath: String = "") {
         self.value = value
         self.children = children
         self.compressedPath = compressedPath
     }
     
+    /**
+     Returns `true` if this node has no value and no children.
+     
+     - Complexity: O(1)
+     */
     @inline(__always)
     var isEmpty: Bool {
         value == nil && children.isEmpty
     }
     
+    /**
+     Returns the value stored at this node.
+     
+     - Returns: The value, or `nil` if no value is stored
+     - Complexity: O(1)
+     */
     @inline(__always)
     var nodeValue: Value? {
         return value
     }
     
+    /**
+     Returns the compressed child array for this node.
+     
+     - Returns: The child nodes structure
+     - Complexity: O(1)
+     */
     @inline(__always)
     var nodeChildren: CompressedChildArray<Value> {
         return children
     }
     
+    /**
+     Returns the total number of values stored in this subtree.
+     
+     This includes the value at this node (if any) plus all values in child nodes.
+     
+     - Returns: The total count of values in this subtree
+     - Complexity: O(n) where n is the number of nodes in the subtree
+     */
     var count: Int {
         let selfCount = value != nil ? 1 : 0
         return selfCount + children.totalCount
     }
     
+    /**
+     Retrieves the value associated with the given key in this subtree.
+     
+     - Parameter key: The key to search for
+     - Returns: The associated value, or `nil` if not found
+     - Complexity: O(k) where k is the length of the key
+     */
     func value(for key: String) -> Value? {
         return value(for: ArraySlice(key))
     }
@@ -68,6 +139,17 @@ internal struct TrieNode<Value> {
         return nil
     }
     
+    /**
+     Returns a new node with the given key-value pair added or updated.
+     
+     This method implements path compression by potentially splitting nodes
+     when new keys diverge from existing compressed paths.
+     
+     - Parameter key: The key to add or update
+     - Parameter value: The value to associate with the key
+     - Returns: A new TrieNode representing the updated subtree
+     - Complexity: O(k) where k is the length of the key
+     */
     func setting(key: String, value: Value) -> TrieNode<Value> {
         return setting(key: ArraySlice(key), value: value)
     }
@@ -149,6 +231,16 @@ internal struct TrieNode<Value> {
         return result
     }
     
+    /**
+     Returns a new node with the given key removed, or `nil` if the node becomes empty.
+     
+     This method handles path compression by potentially merging nodes when
+     a removal operation leaves a node with only one child and no value.
+     
+     - Parameter key: The key to remove
+     - Returns: A new TrieNode without the key, or `nil` if the subtree becomes empty
+     - Complexity: O(k) where k is the length of the key
+     */
     func removing(key: String) -> TrieNode<Value>? {
         return removing(keySlice: ArraySlice(key))
     }
@@ -199,12 +291,27 @@ internal struct TrieNode<Value> {
     }
     
     
+    /**
+     Returns all keys stored in this subtree.
+     
+     The keys are collected by traversing the entire subtree and building
+     complete key strings from the compressed path segments.
+     
+     - Returns: An array of all keys in this subtree
+     - Complexity: O(n*m) where n is the number of keys and m is the average key length
+     */
     func allKeys() -> [String] {
         var keys: [String] = []
         collectKeys(prefix: "", into: &keys)
         return keys
     }
     
+    /**
+     Returns all values stored in this subtree.
+     
+     - Returns: An array of all values in this subtree
+     - Complexity: O(n) where n is the number of values
+     */
     func allValues() -> [Value] {
         var values: [Value] = []
         collectValues(into: &values)
@@ -233,6 +340,16 @@ internal struct TrieNode<Value> {
         }
     }
     
+    /**
+     Returns the compressed child array representing the subtree at the given prefix.
+     
+     This method navigates to the end of the prefix path and returns the child array
+     from that point, effectively creating a subtrie rooted at the prefix.
+     
+     - Parameter prefix: The prefix to traverse to
+     - Returns: The compressed child array at the prefix location
+     - Complexity: O(k) where k is the length of the prefix
+     */
     func traverse(prefix: String) -> CompressedChildArray<Value> {
         return traverse(prefix: ArraySlice(prefix))
     }
@@ -260,6 +377,16 @@ internal struct TrieNode<Value> {
         return CompressedChildArray()
     }
     
+    /**
+     Returns all values encountered while traversing the given path.
+     
+     This method collects values from all nodes visited during path traversal,
+     not just the final destination. Useful for hierarchical data access.
+     
+     - Parameter path: The path to traverse
+     - Returns: An array of values found along the path
+     - Complexity: O(k) where k is the length of the path
+     */
     func getValuesAlongPath(path: String) -> [Value] {
         var values: [Value] = []
         getValuesAlongPath(path: ArraySlice(path), values: &values)
@@ -290,6 +417,18 @@ internal struct TrieNode<Value> {
 
 // MARK: - Testing Support
 internal extension TrieNode {
+    /**
+     Returns `true` if this node and all its descendants maintain proper compression invariants.
+     
+     A properly compressed node satisfies:
+     - If it has no value and exactly one child, it should be merged with that child
+     - If it has no value and no children, it should only exist as an empty root
+     
+     This property is used for testing and debugging trie compression.
+     
+     - Returns: `true` if the subtree is properly compressed
+     - Complexity: O(n) where n is the number of nodes in the subtree
+     */
     var isFullyCompressed: Bool {
         // Invariant 1: A node should not have no value and exactly one child
         // (such nodes should be merged with their single child)
@@ -314,10 +453,22 @@ internal extension TrieNode {
         return allChildrenCompressed
     }
     
+    /**
+     Returns `true` if this node stores a value.
+     
+     - Returns: `true` if a value is stored at this node
+     - Complexity: O(1)
+     */
     var hasValue: Bool {
         return value != nil
     }
     
+    /**
+     Returns the number of direct child nodes.
+     
+     - Returns: The count of child nodes
+     - Complexity: O(1)
+     */
     var childCount: Int {
         return children.childCount
     }
