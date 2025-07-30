@@ -8,10 +8,16 @@ let package = Package(
             name: "TrieDictionary",
             targets: ["TrieDictionary"]),
     ],
+    dependencies: [
+        // No external dependencies - pure Swift implementation
+    ],
     targets: [
         .target(
             name: "TrieDictionary",
-            dependencies: []),
+            dependencies: [],
+            swiftSettings: [
+                .define("SWIFT_PACKAGE")
+            ]),
         .testTarget(
             name: "TrieDictionaryTests",
             dependencies: ["TrieDictionary"]),
