@@ -23,14 +23,17 @@ internal struct TrieNode<Value> {
         self.compressedPath = compressedPath
     }
     
+    @inline(__always)
     var isEmpty: Bool {
         value == nil && children.isEmpty
     }
     
+    @inline(__always)
     var nodeValue: Value? {
         return value
     }
     
+    @inline(__always)
     var nodeChildren: CompressedChildArray<Value> {
         return children
     }
@@ -70,10 +73,8 @@ internal struct TrieNode<Value> {
     }
     
     private func setting(key: ArraySlice<Character>, value: Value) -> TrieNode<Value> {
-        let keyString = String(key)
-        
         // Handle empty key - set value at current node
-        if keyString.isEmpty {
+        if key.isEmpty {
             return TrieNode(value: value, children: children, compressedPath: compressedPath)
         }
         
@@ -106,7 +107,7 @@ internal struct TrieNode<Value> {
             return TrieNode(value: value, children: newChildren, compressedPath: String(key))
         }
         // Paths diverge, need to split at common prefix
-        let common = commonPrefix(key, compressedPathSlice)
+        let common = commonPrefixString(key, compressedPathSlice)
         let keyRemainder = String(key.dropFirst(common.count))
         let pathRemainder = String(compressedPathSlice.dropFirst(common.count))
         
@@ -120,8 +121,14 @@ internal struct TrieNode<Value> {
         return TrieNode(value: nil, children: newChildren, compressedPath: common)
     }
     
+    @inline(__always)
     private func commonPrefix(_ str1: String, _ str2: String) -> String {
         return commonPrefix(ArraySlice(str1), ArraySlice(str2))
+    }
+    
+    @inline(__always) 
+    private func commonPrefixString(_ slice1: ArraySlice<Character>, _ slice2: ArraySlice<Character>) -> String {
+        return commonPrefix(slice1, slice2)
     }
     
     private func commonPrefix(_ slice1: ArraySlice<Character>, _ slice2: ArraySlice<Character>) -> String {
@@ -146,6 +153,7 @@ internal struct TrieNode<Value> {
         return removing(keySlice: ArraySlice(key))
     }
     
+    @inline(__always)
     private func compareSlices(_ slice1: ArraySlice<Character>, _ slice2: ArraySlice<Character>) -> Int {
         if (slice1.elementsEqual(slice2)) { return 0 }
         if (slice1.starts(with: slice2)) { return 1 }

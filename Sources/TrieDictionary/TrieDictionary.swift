@@ -11,6 +11,7 @@ public struct TrieDictionary<Value> {
         self.children = children
     }
     
+    @inline(__always)
     public var isEmpty: Bool {
         children.isEmpty
     }
@@ -105,8 +106,13 @@ public struct TrieDictionary<Value> {
     public func addingPrefix(_ prefix: String) -> TrieDictionary<Value> {
         guard !prefix.isEmpty else { return self }
         var result = TrieDictionary<Value>()
+        let prefixCapacity = prefix.count
         for (key, value) in self {
-            result[prefix + key] = value
+            var newKey = String()
+            newKey.reserveCapacity(prefixCapacity + key.count)
+            newKey.append(prefix)
+            newKey.append(key)
+            result[newKey] = value
         }
         return result
     }
@@ -115,8 +121,13 @@ public struct TrieDictionary<Value> {
     public func addingSuffix(_ suffix: String) -> TrieDictionary<Value> {
         guard !suffix.isEmpty else { return self }
         var result = TrieDictionary<Value>()
+        let suffixCapacity = suffix.count
         for (key, value) in self {
-            result[key + suffix] = value
+            var newKey = String()
+            newKey.reserveCapacity(key.count + suffixCapacity)
+            newKey.append(key)
+            newKey.append(suffix)
+            result[newKey] = value
         }
         return result
     }

@@ -3,6 +3,89 @@ import XCTest
 
 final class PerformanceTests: XCTestCase {
     
+    // MARK: - Baseline Performance Tests
+    
+    func testInsertionPerformance() {
+        let words = generateTestWords(count: 10000)
+        var trie = TrieDictionary<Int>()
+        
+        measure {
+            for (index, word) in words.enumerated() {
+                trie[word] = index
+            }
+        }
+    }
+    
+    func testLookupPerformance() {
+        let words = generateTestWords(count: 10000)
+        var trie = TrieDictionary<Int>()
+        
+        // Setup
+        for (index, word) in words.enumerated() {
+            trie[word] = index
+        }
+        
+        measure {
+            for word in words {
+                _ = trie[word]
+            }
+        }
+    }
+    
+    func testTraversalPerformance() {
+        let words = generateTestWords(count: 5000)
+        var trie = TrieDictionary<Int>()
+        
+        // Setup
+        for (index, word) in words.enumerated() {
+            trie[word] = index
+        }
+        
+        let prefixes = Array(words.prefix(100)).map { String($0.prefix(3)) }
+        
+        measure {
+            for prefix in prefixes {
+                _ = trie.traverse(prefix)
+            }
+        }
+    }
+    
+    func testPathValuesPerformance() {
+        let words = generateTestWords(count: 5000)
+        var trie = TrieDictionary<Int>()
+        
+        // Setup
+        for (index, word) in words.enumerated() {
+            trie[word] = index
+        }
+        
+        let paths = Array(words.prefix(1000))
+        
+        measure {
+            for path in paths {
+                _ = trie.getValuesAlongPath(path)
+            }
+        }
+    }
+    
+    func testFunctionalOperationsPerformance() {
+        let words = generateTestWords(count: 2000)
+        var trie = TrieDictionary<Int>()
+        
+        // Setup
+        for (index, word) in words.enumerated() {
+            trie[word] = index
+        }
+        
+        measure {
+            _ = trie.addingPrefix("test_")
+            _ = trie.addingSuffix("_end")
+            _ = trie.removingPrefix("te")
+        }
+    }
+    
+    // MARK: - Original Tests (for compatibility)
+    
     func testLargeDataSetInsertion() {
         measure {
             var dict = TrieDictionary<Int>()
@@ -82,5 +165,35 @@ final class PerformanceTests: XCTestCase {
                 dict.removeValue(forKey: key)
             }
         }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func generateTestWords(count: Int) -> [String] {
+        var words: [String] = []
+        let characters = "abcdefghijklmnopqrstuvwxyz"
+        
+        for i in 0..<count {
+            let wordLength = (i % 15) + 3 // Length between 3-17
+            var word = ""
+            
+            for _ in 0..<wordLength {
+                let randomChar = characters.randomElement()!
+                word.append(randomChar)
+            }
+            
+            // Add some common prefixes to create more realistic trie structure
+            if i % 10 == 0 {
+                word = "common_" + word
+            } else if i % 15 == 0 {
+                word = "test_" + word
+            } else if i % 20 == 0 {
+                word = "prefix_" + word
+            }
+            
+            words.append(word)
+        }
+        
+        return words
     }
 }
