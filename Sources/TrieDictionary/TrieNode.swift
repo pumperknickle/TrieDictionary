@@ -2,114 +2,138 @@ import Foundation
 
 internal struct TrieNode<Value> {
     private let value: Value?
-    private let isTerminal: Bool
     private let children: CompressedChildArray<Value>
     private let compressedPath: String
     
     init() {
         self.value = nil
-        self.isTerminal = false
         self.children = CompressedChildArray()
         self.compressedPath = ""
     }
     
-    private init(value: Value?, isTerminal: Bool, children: CompressedChildArray<Value>, compressedPath: String = "") {
+    init(compressedPath: String) {
+        self.value = nil
+        self.children = CompressedChildArray()
+        self.compressedPath = compressedPath
+    }
+    
+    init(value: Value?, children: CompressedChildArray<Value>, compressedPath: String = "") {
         self.value = value
-        self.isTerminal = isTerminal
         self.children = children
         self.compressedPath = compressedPath
     }
     
     var isEmpty: Bool {
-        !isTerminal && children.isEmpty
+        value == nil && children.isEmpty
+    }
+    
+    var nodeValue: Value? {
+        return value
+    }
+    
+    var nodeChildren: CompressedChildArray<Value> {
+        return children
     }
     
     var count: Int {
-        let selfCount = isTerminal ? 1 : 0
+        let selfCount = value != nil ? 1 : 0
         return selfCount + children.totalCount
     }
     
     func value(for key: String) -> Value? {
-        return value(for: key, startIndex: key.startIndex)
+        return value(for: ArraySlice(key))
     }
     
-    private func value(for key: String, startIndex: String.Index) -> Value? {
-        // Handle compressed path
-        if !compressedPath.isEmpty {
-            let remainingKey = String(key[startIndex...])
-            
-            // If the remaining key matches the compressed path exactly
-            if remainingKey == compressedPath {
-                return isTerminal ? value : nil
-            }
-            
-            // If the remaining key starts with the compressed path, consume it
-            if remainingKey.hasPrefix(compressedPath) {
-                let newStartIndex = key.index(startIndex, offsetBy: compressedPath.count)
-                return value(for: key, startIndex: newStartIndex)
-            }
-            
-            // Otherwise, no match
-            return nil
+    private func value(for key: ArraySlice<Character>) -> Value? {
+        // Optimize: Compare ArraySlice directly without string conversion
+        let compressedPathSlice = ArraySlice(compressedPath)
+        
+        // If the remaining key matches the compressed path exactly
+        if key.elementsEqual(compressedPathSlice) {
+            return value
         }
         
-        // If we've consumed the entire key
-        if startIndex == key.endIndex {
-            return isTerminal ? value : nil
+        // If the remaining key starts with the compressed path, consume it
+        if key.starts(with: compressedPathSlice) {
+            let newKey = key.dropFirst(compressedPathSlice.count)
+            guard let childChar = newKey.first else { return value }
+            guard let child = children.child(for: childChar) else { return nil }
+            return child.value(for: newKey)
         }
         
-        // Continue traversing children
-        let char = key[startIndex]
-        guard let childNode = children.child(for: char) else {
-            return nil
-        }
-        
-        let nextIndex = key.index(after: startIndex)
-        return childNode.value(for: key, startIndex: nextIndex)
+        // Otherwise, no match
+        return nil
     }
     
     func setting(key: String, value: Value) -> TrieNode<Value> {
-        return setting(key: key, value: value, startIndex: key.startIndex)
+        return setting(key: ArraySlice(key), value: value)
     }
     
-    private func setting(key: String, value: Value, startIndex: String.Index) -> TrieNode<Value> {
-        // For now, let's use a simpler approach without complex path compression during insertion
-        // Handle compressed path by consuming it if the key matches
-        if !compressedPath.isEmpty {
-            let remainingKey = String(key[startIndex...])
-            if remainingKey.hasPrefix(compressedPath) {
-                let newStartIndex = key.index(startIndex, offsetBy: compressedPath.count)
-                return setting(key: key, value: value, startIndex: newStartIndex)
+    private func setting(key: ArraySlice<Character>, value: Value) -> TrieNode<Value> {
+        let keyString = String(key)
+        
+        // Handle empty key - set value at current node
+        if keyString.isEmpty {
+            return TrieNode(value: value, children: children, compressedPath: compressedPath)
+        }
+        
+        let compressedPathSlice = ArraySlice(compressedPath)
+        let comparison = compareSlices(key, compressedPathSlice)
+        if comparison == 0 {
+            // Key exactly matches compressed path - set value here
+            return TrieNode(value: value, children: children, compressedPath: compressedPath)
+        }
+        if comparison == 1 {
+            // Key starts with our compressed path, consume it and continue
+            let newKey = key.dropFirst(compressedPathSlice.count)
+            let childChar = newKey.first!
+            if let child = children.child(for: childChar) {
+                let updatedChild = child.setting(key: newKey, value: value)
+                let newChildren = children.setting(char: childChar, node: updatedChild)
+                return TrieNode(value: self.value, children: newChildren, compressedPath: compressedPath)
             } else {
-                // For now, just return self - more complex splitting logic can be added later
-                return self
+                // Create a new child with compressed path
+                let newChild = TrieNode(value: value, children: CompressedChildArray(), compressedPath: String(newKey))
+                let newChildren = children.setting(char: childChar, node: newChild)
+                return TrieNode(value: self.value, children: newChildren, compressedPath: compressedPath)
             }
         }
-        
-        if startIndex == key.endIndex {
-            return TrieNode(value: value, isTerminal: true, children: children, compressedPath: compressedPath)
+        if comparison == 2 {
+            // Our compressed path starts with the key, need to split
+            let remainingPath = String(compressedPathSlice.dropFirst(key.count))
+            let existingChild = TrieNode(value: self.value, children: children, compressedPath: remainingPath)
+            let newChildren = CompressedChildArray<Value>().setting(char: remainingPath.first!, node: existingChild)
+            return TrieNode(value: value, children: newChildren, compressedPath: String(key))
         }
+        // Paths diverge, need to split at common prefix
+        let common = commonPrefix(key, compressedPathSlice)
+        let keyRemainder = String(key.dropFirst(common.count))
+        let pathRemainder = String(compressedPathSlice.dropFirst(common.count))
         
-        let char = key[startIndex]
-        let nextIndex = key.index(after: startIndex)
+        // Create child for existing path
+        let existingChild = TrieNode(value: self.value, children: children, compressedPath: pathRemainder)
+        var newChildren = CompressedChildArray<Value>().setting(char: pathRemainder.first!, node: existingChild)
         
-        let existingChild = children.child(for: char) ?? TrieNode()
-        let updatedChild = existingChild.setting(key: key, value: value, startIndex: nextIndex)
-        let updatedChildren = children.setting(char: char, node: updatedChild)
-        
-        return TrieNode(value: self.value, isTerminal: isTerminal, children: updatedChildren, compressedPath: compressedPath)
+        // Create child for new key
+        let newChild = TrieNode(value: value, children: CompressedChildArray(), compressedPath: keyRemainder)
+        newChildren = newChildren.setting(char: keyRemainder.first!, node: newChild)
+        return TrieNode(value: nil, children: newChildren, compressedPath: common)
     }
     
     private func commonPrefix(_ str1: String, _ str2: String) -> String {
+        return commonPrefix(ArraySlice(str1), ArraySlice(str2))
+    }
+    
+    private func commonPrefix(_ slice1: ArraySlice<Character>, _ slice2: ArraySlice<Character>) -> String {
+        // Optimize: Pre-allocate string capacity and avoid repeated memory allocations
+        let maxLength = min(slice1.count, slice2.count)
         var result = ""
-        let minLength = min(str1.count, str2.count)
+        result.reserveCapacity(maxLength)
         
-        for i in 0..<minLength {
-            let idx1 = str1.index(str1.startIndex, offsetBy: i)
-            let idx2 = str2.index(str2.startIndex, offsetBy: i)
-            
-            if str1[idx1] == str2[idx2] {
-                result.append(str1[idx1])
+        let pairs = zip(slice1, slice2)
+        for (char1, char2) in pairs {
+            if char1 == char2 {
+                result.append(char1)
             } else {
                 break
             }
@@ -118,56 +142,54 @@ internal struct TrieNode<Value> {
         return result
     }
     
-    func removing(key: String) -> TrieNode<Value> {
-        return removing(key: key, startIndex: key.startIndex)
+    func removing(key: String) -> TrieNode<Value>? {
+        return removing(keySlice: ArraySlice(key))
     }
     
-    private func removing(key: String, startIndex: String.Index) -> TrieNode<Value> {
-        let remainingKey = String(key[startIndex...])
-        
-        if !compressedPath.isEmpty {
-            if remainingKey.hasPrefix(compressedPath) {
-                let newStartIndex = key.index(startIndex, offsetBy: compressedPath.count)
-                return removing(key: key, startIndex: newStartIndex)
-            } else {
-                return self
-            }
-        }
-        
-        if startIndex == key.endIndex {
-            if !isTerminal {
-                return self
-            }
-            // Just remove the terminal flag and value, keep children
-            return TrieNode(value: nil, isTerminal: false, children: children, compressedPath: compressedPath)
-        }
-        
-        let char = key[startIndex]
-        guard let existingChild = children.child(for: char) else {
-            return self
-        }
-        
-        let nextIndex = key.index(after: startIndex)
-        let updatedChild = existingChild.removing(key: key, startIndex: nextIndex)
-        
-        if updatedChild.isEmpty {
-            let updatedChildren = children.removing(char: char)
-            return TrieNode(value: self.value, isTerminal: isTerminal, children: updatedChildren, compressedPath: compressedPath)
-        } else {
-            let updatedChildren = children.setting(char: char, node: updatedChild)
-            return TrieNode(value: self.value, isTerminal: isTerminal, children: updatedChildren, compressedPath: compressedPath)
-        }
+    private func compareSlices(_ slice1: ArraySlice<Character>, _ slice2: ArraySlice<Character>) -> Int {
+        if (slice1.elementsEqual(slice2)) { return 0 }
+        if (slice1.starts(with: slice2)) { return 1 }
+        if (slice2.starts(with: slice1)) { return 2 }
+        else { return 3 }
     }
     
-    private func compressIfNeeded(_ node: TrieNode<Value>) -> TrieNode<Value> {
-        if !node.isTerminal && node.children.childCount == 1 && node.value == nil {
-            if let (singleChar, singleChild) = node.children.firstChild {
-                let newCompressedPath = node.compressedPath + String(singleChar) + singleChild.compressedPath
-                return TrieNode(value: singleChild.value, isTerminal: singleChild.isTerminal, children: singleChild.children, compressedPath: newCompressedPath)
+    private func removing(keySlice: ArraySlice<Character>) -> TrieNode<Value>? {
+        let compressedPathSlice = ArraySlice(compressedPath)
+        let comparison = compareSlices(keySlice, compressedPathSlice)
+        if comparison == 0 {
+            if children.childCount == 0 {
+                return nil
             }
+            if children.childCount == 1 {
+                let child = children.firstChild!
+                return Self(value: child.value, children: child.children, compressedPath: compressedPath + child.compressedPath)
+            }
+            return Self(value: nil, children: children, compressedPath: compressedPath)
         }
-        return node
+        if comparison == 1 {
+            let newKey = keySlice.dropFirst(compressedPathSlice.count)
+            let childChar = newKey.first!
+            guard let child = children.child(for: childChar) else { return self }
+            let newChild = child.removing(keySlice: newKey)
+            if let newChild = newChild {
+                let newChildren = children.setting(char: childChar, node: newChild)
+                return Self(value: value, children: newChildren, compressedPath: compressedPath)
+            }
+            let newChildren = children.removing(char: childChar)
+            if newChildren.childCount == 0 && value == nil {
+                // Node has no value and no children - should be removed
+                return nil
+            }
+            if newChildren.childCount == 1 && value == nil {
+                let child = newChildren.firstChild!
+                return Self(value: child.value, children: child.children, compressedPath: compressedPath + child.compressedPath)
+            }
+            return Self(value: value, children: newChildren, compressedPath: compressedPath)
+            
+        }
+        return self
     }
+    
     
     func allKeys() -> [String] {
         var keys: [String] = []
@@ -184,57 +206,111 @@ internal struct TrieNode<Value> {
     private func collectKeys(prefix: String, into keys: inout [String]) {
         let fullPrefix = prefix + compressedPath
         
-        if isTerminal {
+        if value != nil {
             keys.append(fullPrefix)
         }
         
-        children.forEach { char, node in
-            let newPrefix = fullPrefix + String(char)
-            node.collectKeys(prefix: newPrefix, into: &keys)
+        children.forEach { node in
+            node.collectKeys(prefix: fullPrefix, into: &keys)
         }
     }
     
     private func collectValues(into values: inout [Value]) {
-        if isTerminal, let value = value {
+        if let value = value {
             values.append(value)
         }
         
-        children.forEach { _, node in
+        children.forEach { node in
             node.collectValues(into: &values)
         }
     }
     
-    func traverse(prefix: String) -> TrieNode<Value> {
+    func traverse(prefix: String) -> CompressedChildArray<Value> {
         return traverse(prefix: ArraySlice(prefix))
     }
     
-    private func traverse(prefix: ArraySlice<Character>) -> TrieNode<Value> {
-        let prefixString = String(prefix)
+    private func traverse(prefix: ArraySlice<Character>) -> CompressedChildArray<Value> {
+        let comparison = compareSlices(prefix, ArraySlice(compressedPath))
         
-        if !compressedPath.isEmpty {
-            if prefixString.hasPrefix(compressedPath) {
-                let remainingPrefixCount = prefixString.count - compressedPath.count
-                if remainingPrefixCount <= 0 {
-                    return self
-                }
-                let newPrefix = Array(prefixString.dropFirst(compressedPath.count))
-                return traverse(prefix: ArraySlice(newPrefix))
-            } else if compressedPath.hasPrefix(prefixString) {
-                return self
-            } else {
-                return TrieNode<Value>()
+        if comparison == 0 {
+            return children
+        }
+        if comparison == 1 {
+            // Prefix starts with our compressed path - consume it and continue with children
+            let remainingPrefix = prefix.dropFirst(compressedPath.count)
+            let firstChar = remainingPrefix.first!
+            guard let childNode = children.child(for: firstChar) else {
+                return CompressedChildArray() // Empty subtrie
+            }
+            return childNode.traverse(prefix: remainingPrefix)
+        }
+        if comparison == 2 {
+            // Our compressed path starts with the prefix - need to create a subtrie
+            let remainingPath = String(compressedPath.dropFirst(prefix.count))
+            return CompressedChildArray().setting(char: remainingPath.first!, node: TrieNode(value: value, children: children, compressedPath: remainingPath))
+        }
+        return CompressedChildArray()
+    }
+    
+    func getValuesAlongPath(path: String) -> [Value] {
+        var values: [Value] = []
+        getValuesAlongPath(path: ArraySlice(path), values: &values)
+        return values
+    }
+    
+    private func getValuesAlongPath(path: ArraySlice<Character>, values: inout [Value]) {
+        let comparison = compareSlices(path, ArraySlice(compressedPath))
+        if comparison == 0 && value != nil {
+            values.append(value!)
+            return
+        }
+        if comparison == 1 {
+            if value != nil {
+                values.append(value!)
+            }
+            let remainingPath = path.dropFirst(compressedPath.count)
+            let firstChar = remainingPath.first!
+            guard let childNode = children.child(for: firstChar) else {
+                return // Path doesn't exist
+            }
+            childNode.getValuesAlongPath(path: remainingPath, values: &values)
+        }
+    }
+    
+    
+}
+
+// MARK: - Testing Support
+internal extension TrieNode {
+    var isFullyCompressed: Bool {
+        // Invariant 1: A node should not have no value and exactly one child
+        // (such nodes should be merged with their single child)
+        if value == nil && children.childCount == 1 {
+            return false
+        }
+        
+        // Invariant 2: A node should not have no children and no value
+        // EXCEPT for the root node of an empty trie, which is valid
+        if value == nil && children.childCount == 0 && !compressedPath.isEmpty {
+            return false
+        }
+        
+        // Check all children recursively
+        var allChildrenCompressed = true
+        children.forEach { childNode in
+            if !childNode.isFullyCompressed {
+                allChildrenCompressed = false
             }
         }
         
-        guard let firstChar = prefix.first else {
-            return self
-        }
-        
-        guard let childNode = children.child(for: firstChar) else {
-            return TrieNode<Value>()
-        }
-        
-        let suffix = prefix.dropFirst()
-        return childNode.traverse(prefix: suffix)
+        return allChildrenCompressed
+    }
+    
+    var hasValue: Bool {
+        return value != nil
+    }
+    
+    var childCount: Int {
+        return children.childCount
     }
 }

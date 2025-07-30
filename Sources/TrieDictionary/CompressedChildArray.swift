@@ -43,14 +43,18 @@ internal struct CompressedChildArray<Value> {
         let index = popCount(bitmap & (bit - 1))
         
         if (bitmap & bit) != 0 {
+            // Optimize: Always need to update for struct equality
             var newNodes = nodes
             var newChars = chars
             newNodes[index] = node
             newChars[index] = char
             return CompressedChildArray(bitmap: bitmap, nodes: newNodes, chars: newChars)
         } else {
+            // Optimize: Pre-allocate arrays with known capacity
             var newNodes = nodes
             var newChars = chars
+            newNodes.reserveCapacity(nodes.count + 1)
+            newChars.reserveCapacity(chars.count + 1)
             newNodes.insert(node, at: index)
             newChars.insert(char, at: index)
             let newBitmap = bitmap | bit
@@ -76,15 +80,15 @@ internal struct CompressedChildArray<Value> {
         return CompressedChildArray(bitmap: newBitmap, nodes: newNodes, chars: newChars)
     }
     
-    func forEach(_ body: (Character, TrieNode<Value>) -> Void) {
+    func forEach(_ body: (TrieNode<Value>) -> Void) {
         for i in 0..<nodes.count {
-            body(chars[i], nodes[i])
+            body(nodes[i])
         }
     }
     
-    var firstChild: (Character, TrieNode<Value>)? {
+    var firstChild: TrieNode<Value>? {
         guard !nodes.isEmpty else { return nil }
-        return (chars[0], nodes[0])
+        return nodes[0]
     }
     
     var childCount: Int {
