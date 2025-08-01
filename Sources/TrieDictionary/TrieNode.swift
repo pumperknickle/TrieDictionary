@@ -94,6 +94,12 @@ internal struct TrieNode<Value> {
         return children
     }
     
+    
+    @inline(__always)
+    var nodePath: String {
+        return compressedPath
+    }
+    
     /**
      Returns the total number of values stored in this subtree.
      

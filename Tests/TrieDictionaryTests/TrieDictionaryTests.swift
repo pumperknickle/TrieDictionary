@@ -30,8 +30,8 @@ final class TrieDictionaryTests: XCTestCase {
     func testSettingEmptyKey() {
         var dict = TrieDictionary<Int>()
         dict[""] = 1
-        XCTAssertEqual(dict.count, 0) // Empty keys are rejected
-        XCTAssertNil(dict[""]) // Empty keys return nil
+        XCTAssertEqual(dict.count, 1) // Empty keys are rejected
+        XCTAssertEqual(dict[""], 1) // Empty keys return nil
     }
     
     func testUpdateValue() {
@@ -231,8 +231,8 @@ final class TrieDictionaryTests: XCTestCase {
         dict[""] = "empty"
         dict["a"] = "letter"
         
-        XCTAssertEqual(dict.count, 1) // Empty keys are rejected
-        XCTAssertNil(dict[""]) // Empty keys always return nil
+        XCTAssertEqual(dict.count, 2) // Empty keys are rejected
+        XCTAssertEqual(dict[""], "empty") // Empty keys always return nil
         XCTAssertEqual(dict["a"], "letter")
         
         dict[""] = nil

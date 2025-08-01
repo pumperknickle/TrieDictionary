@@ -79,8 +79,6 @@ final class PerformanceTests: XCTestCase {
         
         measure {
             _ = trie.addingPrefix("test_")
-            _ = trie.addingSuffix("_end")
-            _ = trie.removingPrefix("te")
         }
     }
     

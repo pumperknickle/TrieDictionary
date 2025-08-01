@@ -40,6 +40,7 @@ import Foundation
 public struct TrieDictionary<Value> {
     /// The root children array containing the compressed trie structure
     private var children: CompressedChildArray<Value>
+    private var value: Value?
     
     /**
      Creates an empty TrieDictionary.
@@ -67,7 +68,7 @@ public struct TrieDictionary<Value> {
      */
     @inline(__always)
     public var isEmpty: Bool {
-        children.isEmpty
+        children.isEmpty && value == nil
     }
     
     /**
@@ -77,7 +78,7 @@ public struct TrieDictionary<Value> {
      - Note: This traverses the entire trie structure to count values
      */
     public var count: Int {
-        return children.totalCount
+        return children.totalCount + (value == nil ? 0 : 1)
     }
     
     /**
@@ -99,11 +100,16 @@ public struct TrieDictionary<Value> {
      */
     public subscript(key: String) -> Value? {
         get {
+            if key == "" { return value }
             guard let firstChar = key.first else { return nil }
             guard let child = children.child(for: firstChar) else { return nil }
             return child.value(for: key)
         }
         set {
+            if key == "" {
+                self.value = newValue
+                return
+            }
             guard let firstChar = key.first else { return }
             if let newValue = newValue {
                 if let existingChild = children.child(for: firstChar) {
@@ -144,6 +150,7 @@ public struct TrieDictionary<Value> {
      */
     public func keys() -> [String] {
         var keys: [String] = []
+        if value != nil { keys.append("") }
         children.forEach { node in
             let childKeys = node.allKeys()
             for childKey in childKeys {
@@ -170,6 +177,7 @@ public struct TrieDictionary<Value> {
      */
     public func values() -> [Value] {
         var values: [Value] = []
+        if value != nil { values.append(value!) }
         children.forEach { node in
             let childValues = node.allValues()
             values.append(contentsOf: childValues)
@@ -227,6 +235,9 @@ public struct TrieDictionary<Value> {
     public func getValuesAlongPath(_ path: String) -> [Value] {
         guard let firstChar = path.first else { return [] }
         guard let child = children.child(for: firstChar) else { return [] }
+        if let value = value {
+            return child.getValuesAlongPath(path: path) + [value]
+        }
         return child.getValuesAlongPath(path: path)
     }
     
@@ -311,124 +322,18 @@ public struct TrieDictionary<Value> {
      - Complexity: O(n*m) where n is the number of keys and m is the average key length
      */
     public func addingPrefix(_ prefix: String) -> TrieDictionary<Value> {
-        guard !prefix.isEmpty else { return self }
-        var result = TrieDictionary<Value>()
-        let prefixCapacity = prefix.count
-        for (key, value) in self {
-            var newKey = String()
-            newKey.reserveCapacity(prefixCapacity + key.count)
-            newKey.append(prefix)
-            newKey.append(key)
-            result[newKey] = value
+        if prefix.isEmpty || isEmpty { return self }
+        if value != nil || children.childCount > 1 {
+            let newChild = TrieNode(value: value, children: children, compressedPath: prefix)
+            let newChildren = CompressedChildArray().setting(char: prefix.first!, node: newChild)
+            return Self(newChildren)
         }
-        return result
+        let oldChild = children.firstChild!
+        let newChild = TrieNode(value: oldChild.nodeValue, children: oldChild.nodeChildren, compressedPath: oldChild.nodePath)
+        let newChildren = CompressedChildArray().setting(char: prefix.first!, node: newChild)
+        return Self(newChildren)
     }
-    
-    /**
-     Returns a new TrieDictionary where all keys have the given suffix added.
-     
-     This creates a new trie where every key from the original trie has the specified
-     string appended to it. The original trie remains unchanged.
-     
-     ```swift
-     var trie = TrieDictionary<String>()
-     trie["apple"] = "fruit"
-     trie["tree"] = "plant"
-     
-     let suffixed = trie.addingSuffix("_item")
-     // suffixed contains: "apple_item" -> "fruit", "tree_item" -> "plant"
-     ```
-     
-     - Parameter suffix: The string to append to all keys
-     - Returns: A new TrieDictionary with suffixed keys
-     - Complexity: O(n*m) where n is the number of keys and m is the average key length
-     */
-    public func addingSuffix(_ suffix: String) -> TrieDictionary<Value> {
-        guard !suffix.isEmpty else { return self }
-        var result = TrieDictionary<Value>()
-        let suffixCapacity = suffix.count
-        for (key, value) in self {
-            var newKey = String()
-            newKey.reserveCapacity(key.count + suffixCapacity)
-            newKey.append(key)
-            newKey.append(suffix)
-            result[newKey] = value
-        }
-        return result
-    }
-    
-    /**
-     Returns a new TrieDictionary where keys have the specified prefix removed.
-     
-     Only keys that start with the given prefix are transformed; other keys are kept unchanged.
-     Keys that would become empty after prefix removal are excluded from the result.
-     
-     ```swift
-     var trie = TrieDictionary<String>()
-     trie["com.example.app"] = "app"
-     trie["com.example.lib"] = "library"
-     trie["other.item"] = "other"
-     
-     let trimmed = trie.removingPrefix("com.example.")
-     // trimmed contains: "app" -> "app", "lib" -> "library", "other.item" -> "other"
-     ```
-     
-     - Parameter prefix: The prefix to remove from keys
-     - Returns: A new TrieDictionary with prefix removed from matching keys
-     - Complexity: O(n*m) where n is the number of keys and m is the average key length
-     */
-    public func removingPrefix(_ prefix: String) -> TrieDictionary<Value> {
-        guard !prefix.isEmpty else { return self }
-        var result = TrieDictionary<Value>()
-        for (key, value) in self {
-            if key.hasPrefix(prefix) {
-                let newKey = String(key.dropFirst(prefix.count))
-                if !newKey.isEmpty {  // Don't add empty keys
-                    result[newKey] = value
-                }
-            } else {
-                result[key] = value  // Keep keys that don't have the prefix
-            }
-        }
-        return result
-    }
-    
-    /**
-     Returns a new TrieDictionary where keys have the specified suffix removed.
-     
-     Only keys that end with the given suffix are transformed; other keys are kept unchanged.
-     Keys that would become empty after suffix removal are excluded from the result.
-     
-     ```swift
-     var trie = TrieDictionary<String>()
-     trie["file.txt"] = "text"
-     trie["image.txt"] = "image"
-     trie["other.doc"] = "document"
-     
-     let trimmed = trie.removingSuffix(".txt")
-     // trimmed contains: "file" -> "text", "image" -> "image", "other.doc" -> "document"
-     ```
-     
-     - Parameter suffix: The suffix to remove from keys
-     - Returns: A new TrieDictionary with suffix removed from matching keys
-     - Complexity: O(n*m) where n is the number of keys and m is the average key length
-     */
-    public func removingSuffix(_ suffix: String) -> TrieDictionary<Value> {
-        guard !suffix.isEmpty else { return self }
-        var result = TrieDictionary<Value>()
-        for (key, value) in self {
-            if key.hasSuffix(suffix) {
-                let newKey = String(key.dropLast(suffix.count))
-                if !newKey.isEmpty {  // Don't add empty keys
-                    result[newKey] = value
-                }
-            } else {
-                result[key] = value  // Keep keys that don't have the suffix
-            }
-        }
-        return result
-    }
-    
+
     /**
      Returns a TrieDictionary mapping paths to arrays of values found along each path.
      
@@ -461,37 +366,6 @@ public struct TrieDictionary<Value> {
     }
     
     /**
-     Returns a TrieDictionary where each existing key maps to all values found along its path.
-     
-     This transforms the trie so that each key-value pair becomes a key-array pair,
-     where the array contains all values encountered while traversing from root to that key.
-     
-     ```swift
-     var trie = TrieDictionary<String>()
-     trie["a"] = "first"
-     trie["app"] = "second"
-     trie["apple"] = "third"
-     
-     let expanded = trie.expandingToPathValues()
-     // expanded contains:
-     // "a" -> ["first"]
-     // "app" -> ["first", "second"]
-     // "apple" -> ["first", "second", "third"]
-     ```
-     
-     - Returns: A TrieDictionary where values are arrays of path values
-     - Complexity: O(n*k) where n is the number of keys and k is the average key length
-     */
-    public func expandingToPathValues() -> TrieDictionary<[Value]> {
-        var result = TrieDictionary<[Value]>()
-        for (key, _) in self {
-            let pathValues = getValuesAlongPath(key)
-            result[key] = pathValues
-        }
-        return result
-    }
-    
-    /**
      Returns a new TrieDictionary containing only the subtrie at the given prefix.
      
      This is equivalent to `traverse(_:)` and creates a subtrie rooted at the end of the prefix path.
@@ -513,39 +387,6 @@ public struct TrieDictionary<Value> {
      */
     public func subtrie(at prefix: String) -> TrieDictionary<Value> {
         return traverse(prefix)
-    }
-    
-    /**
-     Returns multiple subtries for the given prefixes.
-     
-     This method creates a TrieDictionary where each key is a prefix and each value is the
-     corresponding subtrie. Only non-empty subtries are included in the result.
-     
-     ```swift
-     var trie = TrieDictionary<String>()
-     trie["com.apple.app"] = "iOS"
-     trie["com.google.search"] = "web"
-     trie["org.swift.lang"] = "language"
-     
-     let subs = trie.subtries(at: ["com.apple.", "com.google."])
-     // subs contains:
-     // "com.apple." -> TrieDictionary with "app" -> "iOS"
-     // "com.google." -> TrieDictionary with "search" -> "web"
-     ```
-     
-     - Parameter prefixes: An array of prefixes to create subtries for
-     - Returns: A TrieDictionary mapping prefixes to their subtries
-     - Complexity: O(p*k) where p is the number of prefixes and k is the average prefix length
-     */
-    public func subtries(at prefixes: [String]) -> TrieDictionary<TrieDictionary<Value>> {
-        var result = TrieDictionary<TrieDictionary<Value>>()
-        for prefix in prefixes {
-            let subtrie = traverse(prefix)
-            if !subtrie.isEmpty {
-                result[prefix] = subtrie
-            }
-        }
-        return result
     }
     
 }
