@@ -59,6 +59,19 @@ public struct TrieDictionary<Value> {
      */
     init(_ children: CompressedChildArray<Value>) {
         self.children = children
+        self.value = nil
+    }
+    
+    /**
+     Internal initializer for creating a TrieDictionary with both children and a value.
+     Used for efficient subtrie operations that need to preserve root values.
+     
+     - Parameter children: The compressed child array to use as the root
+     - Parameter value: The value to store at the root, if any
+     */
+    init(_ children: CompressedChildArray<Value>, value: Value?) {
+        self.children = children
+        self.value = value
     }
     
     /**
@@ -387,6 +400,53 @@ public struct TrieDictionary<Value> {
      */
     public func subtrie(at prefix: String) -> TrieDictionary<Value> {
         return traverse(prefix)
+    }
+    
+    /**
+     Returns a new TrieDictionary containing the merged contents of this trie and another.
+     
+     When both tries contain values for the same key, the merge rule determines the result.
+     Keys that exist in only one trie are preserved in the merged result.
+     
+     ```swift
+     var trie1 = TrieDictionary<Int>()
+     trie1["apple"] = 1
+     trie1["banana"] = 2
+     
+     var trie2 = TrieDictionary<Int>()
+     trie2["apple"] = 10
+     trie2["cherry"] = 3
+     
+     let merged = trie1.merge(other: trie2) { value1, value2 in
+         return value1 + value2  // Sum conflicting values
+     }
+     // merged contains: "apple" -> 11, "banana" -> 2, "cherry" -> 3
+     ```
+     
+     - Parameter other: The other TrieDictionary to merge with
+     - Parameter mergeRule: A closure that resolves conflicts when both tries have values for the same key
+     - Returns: A new TrieDictionary containing the merged result
+     - Complexity: O(m + n) where m and n are the sizes of the two tries
+     */
+    public func merge(other: Self, mergeRule: (Value, Value) -> Value) -> Self {
+        // Handle trivial cases
+        if isEmpty { return other }
+        if other.isEmpty { return self }
+        
+        // Merge root values
+        let mergedRootValue: Value?
+        if let selfValue = value, let otherValue = other.value {
+            mergedRootValue = mergeRule(selfValue, otherValue)
+        } else {
+            mergedRootValue = value ?? other.value
+        }
+        
+        // Merge children using the CompressedChildArray merge method
+        let mergedChildren = children.merging(with: other.children) { selfNode, otherNode in
+            return selfNode.merging(with: otherNode, mergeRule: mergeRule)
+        }
+        
+        return Self(mergedChildren, value: mergedRootValue)
     }
     
 }

@@ -236,4 +236,54 @@ internal struct CompressedChildArray<Value> {
     private func popCount(_ value: UInt64) -> Int {
         return value.nonzeroBitCount
     }
+    
+    /**
+     Returns a new compressed child array that efficiently merges this array with another.
+     
+     This method performs an optimal merge by:
+     - Combining bitmaps to identify all unique positions
+     - Handling character collisions by applying the merge rule to conflicting nodes
+     - Preserving non-conflicting nodes from both arrays
+     - Maintaining sorted order for efficient lookups
+     
+     - Parameter other: The other CompressedChildArray to merge with
+     - Parameter mergeRule: A closure that resolves conflicts between nodes with the same character
+     - Returns: A new CompressedChildArray containing the merged result
+     - Complexity: O(m + n) where m and n are the sizes of the two arrays
+     */
+    func merging(with other: CompressedChildArray<Value>, mergeRule: (TrieNode<Value>, TrieNode<Value>) -> TrieNode<Value>) -> CompressedChildArray<Value> {
+        // Handle trivial cases
+        if isEmpty { return other }
+        if other.isEmpty { return self }
+        
+        // Collect all unique characters from both arrays
+        var characterToNode: [Character: TrieNode<Value>] = [:]
+        
+        // Add nodes from self
+        for i in 0..<nodes.count {
+            characterToNode[chars[i]] = nodes[i]
+        }
+        
+        // Add/merge nodes from other
+        for i in 0..<other.nodes.count {
+            let char = other.chars[i]
+            let otherNode = other.nodes[i]
+            
+            if let existingNode = characterToNode[char] {
+                // Character exists in both - merge the nodes
+                characterToNode[char] = mergeRule(existingNode, otherNode)
+            } else {
+                // Character only exists in other - add it
+                characterToNode[char] = otherNode
+            }
+        }
+        
+        // Build the result using the existing setting method for consistency
+        var result = CompressedChildArray<Value>()
+        for (char, node) in characterToNode {
+            result = result.setting(char: char, node: node)
+        }
+        
+        return result
+    }
 }

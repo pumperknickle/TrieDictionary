@@ -418,6 +418,58 @@ internal struct TrieNode<Value> {
         }
     }
     
+    /**
+     Returns a new node that merges this node with another node.
+     
+     This method handles merging of compressed paths, values, and child nodes.
+     When both nodes have values, the merge rule determines the result.
+     When compressed paths differ, they are properly aligned and merged.
+     
+     - Parameter other: The other TrieNode to merge with
+     - Parameter mergeRule: A closure that resolves conflicts when both nodes have values
+     - Returns: A new merged TrieNode
+     - Complexity: O(m + n) where m and n are the sizes of the child arrays
+     */
+    func merging(with other: TrieNode<Value>, mergeRule: (Value, Value) -> Value) -> TrieNode<Value> {
+        let selfPathSlice = ArraySlice(compressedPath)
+        let otherPathSlice = ArraySlice(other.compressedPath)
+        
+        let comparison = compareSlices(selfPathSlice, otherPathSlice)
+                
+        if comparison == 0 {
+            let mergedValues = value != nil ? (other.value != nil ? mergeRule(value!, other.value!) : value) : other.value
+            return Self(value: mergedValues, children: children.merging(with: other.children, mergeRule: { $0.merging(with: $1, mergeRule: mergeRule) }), compressedPath: compressedPath)
+        }
+        if comparison == 1 {
+            let selfRemainder = selfPathSlice.dropFirst(otherPathSlice.count)
+            let selfChar = selfRemainder.first!
+            let selfChild = TrieNode(value: value, children: children, compressedPath: String(selfRemainder))
+            if let otherChild = other.children.child(for: selfChar) {
+                let newChildren = other.children.setting(char: selfChar, node: selfChild.merging(with: otherChild, mergeRule: mergeRule))
+                return Self(value: other.value, children: newChildren, compressedPath: other.compressedPath)
+            }
+            let newChildren = other.children.setting(char: selfChar, node: selfChild)
+            return Self(value: other.value, children: newChildren, compressedPath: other.compressedPath)
+        }
+        if comparison == 2 {
+            let otherRemainder = otherPathSlice.dropFirst(selfPathSlice.count)
+            let otherChar = otherRemainder.first!
+            let otherChild = TrieNode(value: other.value, children: other.children, compressedPath: String(otherRemainder))
+            if let selfChild = children.child(for: otherChar) {
+                let newChldren = children.setting(char: otherChar, node: selfChild.merging(with: otherChild, mergeRule: mergeRule))
+                return Self(value: value, children: newChldren, compressedPath: compressedPath)
+            }
+            let newChldren = children.setting(char: otherChar, node: otherChild)
+            return Self(value: value, children: newChldren, compressedPath: compressedPath)
+        }
+        let commonPrefix = commonPrefix(otherPathSlice, selfPathSlice)
+        let selfRemainder = selfPathSlice.dropFirst(commonPrefix.count)
+        let otherRemainder = otherPathSlice.dropFirst(commonPrefix.count)
+        let selfChar = selfRemainder.first!
+        let otherChar = otherRemainder.first!
+        let newChildren = CompressedChildArray().setting(char: selfChar, node: Self(value: value, children: children, compressedPath: String(selfRemainder))).setting(char: otherChar, node: Self(value: other.value, children: other.children, compressedPath: String(otherRemainder)))
+        return Self(value: nil, children: newChildren, compressedPath: commonPrefix)
+    }
     
 }
 
