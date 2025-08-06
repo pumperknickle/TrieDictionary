@@ -347,40 +347,40 @@ internal struct TrieNode<Value> {
     }
     
     /**
-     Returns the compressed child array representing the subtree at the given prefix.
+     Returns the compressed child array and value representing the subtree at the given prefix.
      
-     This method navigates to the end of the prefix path and returns the child array
-     from that point, effectively creating a subtrie rooted at the prefix.
+     This method navigates to the end of the prefix path and returns both the child array
+     and any value from that point, effectively creating a subtrie rooted at the prefix.
      
      - Parameter prefix: The prefix to traverse to
-     - Returns: The compressed child array at the prefix location
+     - Returns: A tuple containing the compressed child array and optional value at the prefix location
      - Complexity: O(k) where k is the length of the prefix
      */
-    func traverse(prefix: String) -> CompressedChildArray<Value> {
+    func traverse(prefix: String) -> (CompressedChildArray<Value>, Value?) {
         return traverse(prefix: ArraySlice(prefix))
     }
     
-    private func traverse(prefix: ArraySlice<Character>) -> CompressedChildArray<Value> {
+    private func traverse(prefix: ArraySlice<Character>) -> (CompressedChildArray<Value>, Value?) {
         let comparison = compareSlices(prefix, ArraySlice(compressedPath))
         
         if comparison == 0 {
-            return children
+            return (children, value)
         }
         if comparison == 1 {
             // Prefix starts with our compressed path - consume it and continue with children
             let remainingPrefix = prefix.dropFirst(compressedPath.count)
             let firstChar = remainingPrefix.first!
             guard let childNode = children.child(for: firstChar) else {
-                return CompressedChildArray() // Empty subtrie
+                return (CompressedChildArray(), nil) // Empty subtrie
             }
             return childNode.traverse(prefix: remainingPrefix)
         }
         if comparison == 2 {
             // Our compressed path starts with the prefix - need to create a subtrie
             let remainingPath = String(compressedPath.dropFirst(prefix.count))
-            return CompressedChildArray().setting(char: remainingPath.first!, node: TrieNode(value: value, children: children, compressedPath: remainingPath))
+            return (CompressedChildArray().setting(char: remainingPath.first!, node: TrieNode(value: value, children: children, compressedPath: remainingPath)), nil)
         }
-        return CompressedChildArray()
+        return (CompressedChildArray(), nil)
     }
     
     /**

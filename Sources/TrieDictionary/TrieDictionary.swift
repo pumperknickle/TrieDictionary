@@ -202,7 +202,8 @@ public struct TrieDictionary<Value> {
      Returns a new TrieDictionary containing all key-value pairs whose keys start with the given prefix.
      
      This creates a subtrie rooted at the end of the prefix path. Keys in the returned trie
-     will have the prefix removed.
+     will have the prefix removed. If there is a value at the end of the prefix path, it will
+     be set as the root value of the new TrieDictionary.
      
      ```swift
      var trie = TrieDictionary<String>()
@@ -221,7 +222,8 @@ public struct TrieDictionary<Value> {
     public func traverse(_ prefix: String) -> TrieDictionary<Value> {
         guard let firstChar = prefix.first else { return self }
         guard let child = children.child(for: firstChar) else { return Self() }
-        return Self(child.traverse(prefix: prefix))
+        let (childrenArray, rootValue) = child.traverse(prefix: prefix)
+        return Self(childrenArray, value: rootValue)
     }
     
     
