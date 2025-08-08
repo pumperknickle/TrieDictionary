@@ -385,9 +385,8 @@ public struct TrieDictionary<Value> {
         return Self(CompressedChildArray().setting(char: char, node: child), value: value)
     }
     
-    public func traverseToNextChild(path: String) -> (String, Self)? {
-        guard let firstChar = path.first else { return nil }
-        guard let child = children.child(for: firstChar) else { return nil }
+    public func traverseToNextChild(_ char: Character) -> (String, Self)? {
+        guard let child = children.child(for: char) else { return nil }
         return (child.nodePath, Self(child.nodeChildren, value: child.nodeValue))
     }
     
