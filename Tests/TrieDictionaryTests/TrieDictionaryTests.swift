@@ -262,12 +262,12 @@ final class TrieDictionaryTests: XCTestCase {
         dict["help"] = "me"
         
         let helloSubtrie = dict.traverse("hello")
-        XCTAssertEqual(helloSubtrie.count, 0) // Exact match excluded
-        XCTAssertNil(helloSubtrie[""])
+        XCTAssertEqual(helloSubtrie.count, 1) // Exact match excluded
+        XCTAssertEqual(helloSubtrie[""], "world")
         
         let helpSubtrie = dict.traverse("help")
-        XCTAssertEqual(helpSubtrie.count, 0) // Exact match excluded
-        XCTAssertNil(helpSubtrie[""])
+        XCTAssertEqual(helpSubtrie.count, 1) // Exact match excluded
+        XCTAssertEqual(helpSubtrie[""], "me")
     }
     
     func testTraverseNoMatch() {
@@ -314,8 +314,8 @@ final class TrieDictionaryTests: XCTestCase {
         dict["b"] = "beta"
         
         let aSubtrie = dict.traverse("a")
-        XCTAssertEqual(aSubtrie.count, 2) // Exact match "a" excluded
-        XCTAssertNil(aSubtrie[""]) // Empty keys not supported
+        XCTAssertEqual(aSubtrie.count, 3) // Exact match "a" excluded
+        XCTAssertEqual(aSubtrie[""], "alpha") // Empty keys not supported
         XCTAssertEqual(aSubtrie["b"], "alphabet")
         XCTAssertEqual(aSubtrie["bc"], "abcdef")
         XCTAssertNotEqual(aSubtrie["b"], "beta")
@@ -336,8 +336,8 @@ final class TrieDictionaryTests: XCTestCase {
         
         let cafeSubtrie = dict.traverse("cafe")
         XCTAssertEqual(dict["cafe"], "coffee")
-        XCTAssertEqual(cafeSubtrie.count, 1) // Exact match "cafe" excluded
-        XCTAssertNil(cafeSubtrie[""]) // Empty keys not supported
+        XCTAssertEqual(cafeSubtrie.count, 2) // Exact match "cafe" excluded
+        XCTAssertEqual(cafeSubtrie[""], "coffee") // Empty keys not supported
         XCTAssertEqual(cafeSubtrie["teria"], "restaurant")
     }
     

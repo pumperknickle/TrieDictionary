@@ -487,4 +487,17 @@ extension TrieDictionary {
         }
         return allChildrenCompressed
     }
+    
+    /**
+     Returns an array of all characters that have child nodes at the root level.
+     
+     This method efficiently retrieves characters directly from the CompressedChildArray
+     without needing to traverse the trie structure.
+     
+     - Returns: An array of characters representing the first character of all keys
+     - Complexity: O(n) where n is the number of direct child nodes
+     */
+    public func getAllChildCharacters() -> [Character] {
+        return children.allChildCharacters
+    }
 }
