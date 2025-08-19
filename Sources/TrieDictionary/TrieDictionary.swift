@@ -390,6 +390,11 @@ public struct TrieDictionary<Value> {
         return (child.nodePath, Self(child.nodeChildren, value: child.nodeValue))
     }
     
+    public func getChildPrefix(_ char: Character) -> String? {
+        guard let child = children.child(for: char) else { return nil }
+        return child.nodePath
+    }
+    
     /**
      Returns a new TrieDictionary containing only the subtrie at the given prefix.
      
